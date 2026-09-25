@@ -103,3 +103,50 @@ export interface Incident {
   evidence: string[];
   timeline: TelemetryEvent[];
 }
+
+// ---------------------------------------------------------------------------
+// Replay
+// ---------------------------------------------------------------------------
+
+export interface RouterConfig {
+  maxRetries: number;
+  retryDelayMs: number;
+}
+
+export interface ReplayRunResult {
+  success: boolean;
+  totalLatencyMs: number;
+  providerAAttempts: number;
+  provider429Count: number;
+  retryCount: number;
+  fallbackCount: number;
+  finalProvider: string;
+}
+
+export interface ReplayComparison {
+  latencyDeltaMs: number;
+  latencyImprovementPercent: number;
+  retriesReducedBy: number;
+  providerAAttemptsReducedBy: number;
+}
+
+export type ReplayStatus = "completed" | "failed";
+
+export interface ReplayRecord {
+  id: string;
+  createdAt: string;
+  incidentId?: string;
+  status: ReplayStatus;
+  baselineConfig: RouterConfig;
+  candidateConfig: RouterConfig;
+  baseline: ReplayRunResult;
+  candidate: ReplayRunResult;
+  comparison: ReplayComparison;
+  verified: boolean;
+}
+
+export interface ReplayRequest {
+  baselineConfig: RouterConfig;
+  candidateConfig: RouterConfig;
+  incidentId?: string;
+}

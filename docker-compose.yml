@@ -45,3 +45,21 @@ services:
         condition: service_healthy
       incident-engine:
         condition: service_healthy
+
+  replay-engine:
+    build:
+      context: .
+      dockerfile: services/replay-engine/Dockerfile
+    ports:
+      - "${REPLAY_ENGINE_PORT:-4003}:4003"
+    environment:
+      - REPLAY_ENGINE_PORT=${REPLAY_ENGINE_PORT:-4003}
+      - DEMO_APP_URL=http://demo-ai-app:3001
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4003/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    depends_on:
+      demo-ai-app:
+        condition: service_started
