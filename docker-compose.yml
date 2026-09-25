@@ -63,3 +63,29 @@ services:
     depends_on:
       demo-ai-app:
         condition: service_started
+
+  tracerca-api:
+    build:
+      context: .
+      dockerfile: apps/tracerca-api/Dockerfile
+    ports:
+      - "${TRACERCA_API_PORT:-4004}:4004"
+    environment:
+      - TRACERCA_API_PORT=${TRACERCA_API_PORT:-4004}
+      - INCIDENT_ENGINE_URL=http://incident-engine:4002
+      - REPLAY_ENGINE_URL=http://replay-engine:4003
+      - DEMO_APP_URL=http://demo-ai-app:3001
+      - UPSTREAM_TIMEOUT_MS=${UPSTREAM_TIMEOUT_MS:-5000}
+      - REPLAY_UPSTREAM_TIMEOUT_MS=${REPLAY_UPSTREAM_TIMEOUT_MS:-15000}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4004/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    depends_on:
+      incident-engine:
+        condition: service_healthy
+      replay-engine:
+        condition: service_healthy
+      demo-ai-app:
+        condition: service_started
