@@ -1,0 +1,28 @@
+services:
+  provider-simulator:
+    build:
+      context: .
+      dockerfile: services/provider-simulator/Dockerfile
+    ports:
+      - "${PROVIDER_SIMULATOR_PORT:-4001}:4001"
+    environment:
+      - PROVIDER_SIMULATOR_PORT=${PROVIDER_SIMULATOR_PORT:-4001}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4001/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  demo-ai-app:
+    build:
+      context: .
+      dockerfile: apps/demo-ai-app/Dockerfile
+    ports:
+      - "${DEMO_APP_PORT:-3001}:3001"
+    environment:
+      - DEMO_APP_PORT=${DEMO_APP_PORT:-3001}
+      - PROVIDER_SIMULATOR_URL=http://provider-simulator:4001
+      - MAX_RETRIES=${MAX_RETRIES:-3}
+    depends_on:
+      provider-simulator:
+        condition: service_healthy
