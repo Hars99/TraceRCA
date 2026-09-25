@@ -72,3 +72,34 @@ export interface TelemetrySummary {
   retryCount: number;
   fallbackCount: number;
 }
+
+// ---------------------------------------------------------------------------
+// Incidents
+// ---------------------------------------------------------------------------
+
+export type IncidentStatus = "open" | "investigating" | "resolved";
+export type IncidentSeverity = "low" | "medium" | "high" | "critical";
+
+export interface IncidentMetrics {
+  totalLatencyMs: number;
+  provider429Count: number;
+  retryCount: number;
+  fallbackCount: number;
+  providerAAttempts: number;
+  finalProvider: string;
+}
+
+export interface Incident {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  status: IncidentStatus;
+  severity: IncidentSeverity;
+  trigger: string;
+  requestId: string;
+  traceId: string;
+  summary: string;
+  metrics: IncidentMetrics;
+  evidence: string[];
+  timeline: TelemetryEvent[];
+}

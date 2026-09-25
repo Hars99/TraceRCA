@@ -13,6 +13,20 @@ services:
       timeout: 3s
       retries: 5
 
+  incident-engine:
+    build:
+      context: .
+      dockerfile: services/incident-engine/Dockerfile
+    ports:
+      - "${INCIDENT_ENGINE_PORT:-4002}:4002"
+    environment:
+      - INCIDENT_ENGINE_PORT=${INCIDENT_ENGINE_PORT:-4002}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4002/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   demo-ai-app:
     build:
       context: .
@@ -23,6 +37,11 @@ services:
       - DEMO_APP_PORT=${DEMO_APP_PORT:-3001}
       - PROVIDER_SIMULATOR_URL=http://provider-simulator:4001
       - MAX_RETRIES=${MAX_RETRIES:-3}
+      - RETRY_DELAY_MS=${RETRY_DELAY_MS:-750}
+      - TELEMETRY_MAX_EVENTS=${TELEMETRY_MAX_EVENTS:-5000}
+      - INCIDENT_ENGINE_URL=http://incident-engine:4002
     depends_on:
       provider-simulator:
+        condition: service_healthy
+      incident-engine:
         condition: service_healthy

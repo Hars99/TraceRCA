@@ -2,7 +2,7 @@ import { Router, Request, Response } from "express";
 import { v4 as uuidv4 } from "uuid";
 import type { ChatRequest, ChatResponse, ProviderResponse, RequestLog } from "./types";
 import { writeLog } from "./logger";
-import { append } from "./telemetry/store";
+import { append, getByRequestId } from "./telemetry/store";
 
 const router = Router();
 
@@ -13,6 +13,22 @@ const router = Router();
 const SIMULATOR_URL = process.env.PROVIDER_SIMULATOR_URL ?? "http://localhost:4001";
 const MAX_RETRIES = parseInt(process.env.MAX_RETRIES ?? "3", 10);
 const RETRY_DELAY_MS = parseInt(process.env.RETRY_DELAY_MS ?? "750", 10);
+const INCIDENT_ENGINE_URL = process.env.INCIDENT_ENGINE_URL ?? "http://localhost:4002";
+
+// ---------------------------------------------------------------------------
+// Fire-and-forget ingest — never affects /chat response path
+// ---------------------------------------------------------------------------
+
+function ingestToIncidentEngine(requestId: string, traceId: string): void {
+  const events = getByRequestId(requestId);
+  fetch(`${INCIDENT_ENGINE_URL}/ingest`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ requestId, traceId, events }),
+  }).catch(() => {
+    // intentionally silent — incident engine is non-critical path
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Low-level provider call using built-in fetch (Node 18+)
@@ -134,6 +150,7 @@ router.post("/chat", async (req: Request, res: Response) => {
     } else {
       // request.failed
       append({ ...ctx, type: "request.failed", provider: "B", status, attributes: { reason: "both providers failed" } });
+      ingestToIncidentEngine(requestId, traceId);
       res.status(502).json({ error: "Both providers failed", requestId });
       return;
     }
@@ -147,6 +164,7 @@ router.post("/chat", async (req: Request, res: Response) => {
     fallbackUsed: finalResponse.fallbackUsed,
   });
 
+  ingestToIncidentEngine(requestId, traceId);
   res.status(200).json(finalResponse);
 });
 
