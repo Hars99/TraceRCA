@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "tracerca": {
+      "command": "node",
+      "args": [
+        "${workspaceFolder}/services/bob-mcp/build/index.js"
+      ],
+      "disabled": false,
+      "alwaysAllow": []
+    }
+  }
+}
