@@ -89,3 +89,16 @@ services:
         condition: service_healthy
       demo-ai-app:
         condition: service_started
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: apps/dashboard/Dockerfile
+    ports:
+      - "${DASHBOARD_PORT:-3000}:3000"
+    environment:
+      - PORT=3000
+      - TRACERCA_API_URL=http://tracerca-api:4004
+    depends_on:
+      tracerca-api:
+        condition: service_healthy

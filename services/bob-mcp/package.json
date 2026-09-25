@@ -1,0 +1,21 @@
+{
+  "name": "@tracerca/bob-mcp",
+  "version": "0.1.0",
+  "description": "IBM Bob MCP server — TraceRCA tool adapter",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node build/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.11.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "typescript": "^5.4.5"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
