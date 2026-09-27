@@ -25,7 +25,7 @@ export async function syncPrometheusEvidence(queries: PrometheusSyncQuery[]): Pr
         source: { category: "observability", provider: "prometheus", instance: prometheusUrl(), connector: "prometheus" },
         origin: { kind: "system", actor: "prometheus" }, assertion: "observed",
         provenance: { connector: "prometheus", sourceRecordId, collectedAt: "", originalTimestamp: timestamp, rawReference: query.promql },
-        correlation: { service: labels.service ?? labels.job, environment: labels.environment ?? "development", ...(labels.model ? { model: labels.model } : {}) },
+        correlation: { service: labels.service ?? labels.job, environment: labels.environment ?? "development", ...(labels.model ? { model: labels.model } : {}), ...(labels.run_id ? { keys: { runId: labels.run_id } } : {}) },
         metric: query.metric, value, ...(labels.unit ? { unit: labels.unit } : {}), attributes: { prometheusLabels: labels, promql: query.promql },
       };
       const saved = evidenceRepository.save(record); evidenceIds.push(saved.evidence.id);

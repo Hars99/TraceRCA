@@ -1,97 +1,42 @@
 import Link from "next/link";
 import { IncidentList } from "../components/IncidentList";
 import { ReplayList } from "../components/ReplayList";
-import { ErrorState, HealthPill, MetricCard, SectionHeading } from "../components/ui";
-import { getHealth, getIncidents, getReplays, getTelemetrySummary } from "../lib/api";
-import { formatDate, formatPercent } from "../lib/format";
+import { ErrorState, MetricCard, SectionHeading, SourceBadge } from "../components/ui";
+import { getIncidents, getPlatformHealth, getReplays, queryEvidence } from "../lib/api";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  const [healthResult, incidentsResult, summaryResult, replaysResult] = await Promise.all([
-    getHealth(),
-    getIncidents(),
-    getTelemetrySummary(),
-    getReplays(),
+  const [health, incidentsResult, replaysResult, evidenceResult] = await Promise.all([
+    getPlatformHealth(), getIncidents(), getReplays(), queryEvidence({ limit: 500 }),
   ]);
-
   const incidents = incidentsResult.data?.incidents ?? [];
   const replays = replaysResult.data?.replays ?? [];
-  const summary = summaryResult.data;
-  const latestVerifiedReplay = replays.find((replay) => replay.verified);
+  const evidence = evidenceResult.data?.evidence ?? [];
+  const verified = replays.filter((replay) => replay.verified);
+  const sources = new Set(evidence.map((item) => `${item.source.category}:${item.source.provider ?? item.source.connector ?? "native"}`));
+  const primaryIncident = incidents.find((incident) => incident.id === "INC-001") ?? incidents[0];
 
-  return (
-    <div className="page-shell">
-      <section className="hero-section">
-        <div>
-          <span className="eyebrow">Operations / live signal</span>
-          <h1>See the incident. Prove the fix.</h1>
-          <p className="hero-copy">TraceRCA connects production evidence to a defensible root-cause chain and a measured remediation replay.</p>
-        </div>
-        <div className="health-stack">
-          <HealthPill healthy={healthResult.data?.status === "ok"} label={healthResult.data?.status === "ok" ? "TraceRCA API healthy" : "TraceRCA API unavailable"} />
-          <span className="health-time">{healthResult.data?.timestamp ? `last signal ${formatDate(healthResult.data.timestamp)}` : "waiting for API signal"}</span>
-        </div>
-      </section>
+  return <div className="page-shell">
+    <section className="hero-section"><div><span className="eyebrow">Evidence-grounded incident intelligence</span><h1>From observed signal to verified action.</h1><p className="hero-copy">Two investigations, one platform: deterministic incident verification and real local AI observability.</p></div><SourceBadge tone="real">LIVE EVIDENCE CONSOLE</SourceBadge></section>
 
-      <div className="story-rail" aria-label="TraceRCA workflow">
-        {[
-          ["01", "Production incident"],
-          ["02", "Telemetry"],
-          ["03", "Root cause"],
-          ["04", "Remediation"],
-          ["05", "Replay"],
-          ["06", "Verified"],
-        ].map(([number, label], index, steps) => (
-          <div className="story-step-wrap" key={label}>
-            <div className="story-step"><span>{number}</span><strong>{label}</strong></div>
-            {index < steps.length - 1 ? <span className="story-arrow" aria-hidden="true">→</span> : null}
-          </div>
-        ))}
-      </div>
+    <section className="panel status-panel"><SectionHeading eyebrow="Platform status" title="Live services" /><div className="service-grid">{health.map((service) => <div className="service-status" key={service.name}><span className={`status-light ${service.state}`} /><div><strong>{service.name}</strong><span>{service.state === "healthy" ? "Healthy" : service.state === "unavailable" ? "Unavailable" : "Unknown"}</span></div></div>)}</div></section>
 
-      <section className="metric-grid" aria-label="TraceRCA key performance indicators">
-        <MetricCard icon="◉" label="Open incidents" value={String(incidents.filter((incident) => incident.status === "open").length)} detail="active response queue" />
-        <MetricCard icon="⌁" label="Total requests" value={summary ? String(summary.totalRequests) : "—"} detail="telemetry summary" />
-        <MetricCard icon="!" label="HTTP 429 responses" value={summary ? String(summary.provider429Count) : "—"} detail="provider failures observed" />
-        <MetricCard icon="↻" label="Retry events" value={summary ? String(summary.retryCount) : "—"} detail="router behavior" />
-        <MetricCard icon="⇄" label="Fallbacks" value={summary ? String(summary.fallbackCount) : "—"} detail="recovery paths" />
-        <MetricCard icon="↘" label="Latest verified improvement" value={latestVerifiedReplay ? formatPercent(latestVerifiedReplay.comparison.latencyImprovementPercent) : "—"} detail={latestVerifiedReplay ? latestVerifiedReplay.id : "no verified replay"} />
-      </section>
+    <section className="metric-grid summary-grid" aria-label="Platform summary">
+      <MetricCard icon="!" label="Active / recent incidents" value={String(incidents.length)} detail="returned by TraceRCA" />
+      <MetricCard icon="E" label="Recent evidence records" value={evidenceResult.data ? String(evidenceResult.data.count) : "—"} detail="bounded live query" />
+      <MetricCard icon="✓" label="Verified replays" value={String(verified.length)} detail="verified=true only" />
+      <MetricCard icon="S" label="Connected evidence sources" value={evidenceResult.data ? String(sources.size) : "—"} detail="observed in evidence" />
+    </section>
 
-      {healthResult.error ? <ErrorState title="Live API health unavailable" detail={healthResult.error} /> : null}
-      {incidentsResult.error ? <ErrorState title="Incident feed unavailable" detail={incidentsResult.error} /> : null}
-      {summaryResult.error ? <ErrorState title="Telemetry summary unavailable" detail={summaryResult.error} /> : null}
+    {(incidentsResult.error || replaysResult.error || evidenceResult.error) ? <ErrorState title="Some live data is unavailable" detail={[incidentsResult.error, replaysResult.error, evidenceResult.error].filter(Boolean).join(" · ")} /> : null}
 
-      <div className="dashboard-grid">
-        <section className="panel panel-wide" id="incidents">
-          <SectionHeading eyebrow="Production signal" title="Recent incidents" action={<span className="section-count">{incidents.length} records</span>} />
-          <IncidentList incidents={incidents} />
-        </section>
+    <section className="demo-grid" id="investigations">
+      <article className="demo-card"><div className="demo-card-top"><SourceBadge tone="verified">CONTROLLED + VERIFIED</SourceBadge><span>Story A</span></div><h2>Verified Incident Investigation</h2><p>Provider degradation, retries, fallback recovery, Bob-compatible RCA, and a measured remediation replay.</p><div className="story-mini"><span>HTTP 429</span><b>→</b><span>Retries</span><b>→</b><span>Fallback</span><b>→</b><span>VERIFIED</span></div>{primaryIncident ? <Link className="button primary-button" href={`/incidents/${encodeURIComponent(primaryIncident.id)}`}>View Incident</Link> : <span className="muted">No incidents available.</span>}</article>
+      <article className="demo-card real-demo"><div className="demo-card-top"><SourceBadge tone="real">REAL OBSERVABILITY DATA</SourceBadge><span>Story B</span></div><h2>Real Local LLM Investigation</h2><p>Real Ollama workloads observed through Prometheus, normalized by TraceRCA, and compared within one run ID.</p><div className="story-mini"><span>Ollama</span><b>→</b><span>Prometheus</span><b>→</b><span>Evidence</span><b>→</b><span>RCA</span></div><Link className="button primary-button" href="/evidence/local-llm">View Evidence RCA</Link></article>
+    </section>
 
-        <section className="panel" id="replays">
-          <SectionHeading eyebrow="Measured change" title="Replay ledger" action={<span className="section-count">{replays.length} records</span>} />
-          {replaysResult.error ? <ErrorState title="Replay feed unavailable" detail={replaysResult.error} /> : <ReplayList replays={replays} />}
-        </section>
-
-        <section className="panel bob-panel">
-          <div className="bob-orbit" aria-hidden="true"><span>IBM</span><strong>Bob</strong></div>
-          <div>
-            <span className="eyebrow">Investigation layer</span>
-            <h2>IBM Bob Investigation</h2>
-            <p>Bob connects to TraceRCA through MCP, retrieves incident timelines and metrics, determines the trigger/amplifier/recovery chain, and can invoke isolated remediation replay.</p>
-            <div className="command-list">
-              <code>/tracerca-incident-investigation &lt;incident-id&gt;</code>
-              <code>/tracerca-verified-remediation &lt;incident-id&gt;</code>
-            </div>
-          </div>
-        </section>
-      </div>
-
-      <footer className="page-footer">
-        <span>TraceRCA · evidence first, verification earned</span>
-        <Link href="/">Refresh live data</Link>
-      </footer>
-    </div>
-  );
+    <div className="dashboard-grid compact-dashboard"><section className="panel panel-wide" id="incidents"><SectionHeading eyebrow="Controlled scenario" title="Recent incidents" action={<span className="section-count">{incidents.length} records</span>} /><IncidentList incidents={incidents} /></section><section className="panel" id="replays"><SectionHeading eyebrow="Measured verification" title="Replay ledger" action={<span className="section-count">{replays.length} records</span>} /><ReplayList replays={replays} /></section></div>
+    <footer className="page-footer"><span>TraceRCA · observed facts, explicit hypotheses, earned verification</span><Link href="/">Refresh live data</Link></footer>
+  </div>;
 }

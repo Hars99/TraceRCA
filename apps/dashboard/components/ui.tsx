@@ -94,3 +94,7 @@ export function HealthPill({ healthy, label }: { healthy: boolean; label: string
     </span>
   );
 }
+
+export function SourceBadge({ children, tone = "neutral" }: { children: ReactNode; tone?: "neutral" | "real" | "verified" | "warning" }) {
+  return <span className={`source-badge source-${tone}`}>{children}</span>;
+}
