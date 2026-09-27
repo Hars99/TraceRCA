@@ -2,6 +2,8 @@ import express from "express";
 import incidentsRouter from "./routes/incidents";
 import replaysRouter from "./routes/replays";
 import telemetryRouter from "./routes/telemetry";
+import evidenceRouter from "./routes/evidence";
+import connectorsRouter from "./routes/connectors";
 
 const app = express();
 app.use(express.json());
@@ -30,6 +32,8 @@ app.get("/health", (_req, res) => {
 app.use("/api/incidents", incidentsRouter);
 app.use("/api", replaysRouter);
 app.use("/api/telemetry", telemetryRouter);
+app.use("/api/evidence", evidenceRouter);
+app.use("/api/connectors", connectorsRouter);
 
 // ---------------------------------------------------------------------------
 // Start

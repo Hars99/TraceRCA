@@ -15,6 +15,52 @@
 
 $ErrorActionPreference = "Stop"
 
+function Wait-HttpReady {
+    param (
+        [Parameter(Mandatory = $true)][string]$Name,
+        [Parameter(Mandatory = $true)][string]$Url,
+        [switch]$Html,
+        [int]$TimeoutSec = 30,
+        [int]$RetryDelaySec = 1
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSec)
+    $attempt = 0
+    $lastError = "no response"
+
+    do {
+        $attempt++
+        try {
+            if ($Html) {
+                $response = Invoke-WebRequest -Uri $Url -Method GET -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop
+                if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 400) {
+                    Write-Host "  OK  $Name ready after $attempt attempt(s)." -ForegroundColor Green
+                    return $true
+                }
+                $lastError = "HTTP $($response.StatusCode)"
+            } else {
+                $response = Invoke-RestMethod -Uri $Url -Method GET -TimeoutSec 3 -ErrorAction Stop
+                if ($response -and $response.status -eq "ok") {
+                    Write-Host "  OK  $Name ready after $attempt attempt(s)." -ForegroundColor Green
+                    return $true
+                }
+                $lastError = "unexpected health response"
+            }
+        } catch {
+            # Connection-reset/closed and other startup transport failures are
+            # transient while docker compose restart is still replacing services.
+            $lastError = $_.Exception.Message
+        }
+
+        if ((Get-Date) -lt $deadline) {
+            Start-Sleep -Seconds $RetryDelaySec
+        }
+    } while ((Get-Date) -lt $deadline)
+
+    Write-Host "  FAIL  $Name did not become ready within ${TimeoutSec}s: $lastError" -ForegroundColor Red
+    return $false
+}
+
 Write-Host "==================================================" -ForegroundColor Cyan
 Write-Host "TraceRCA Demo Reset" -ForegroundColor Cyan
 Write-Host "==================================================" -ForegroundColor Cyan
@@ -22,7 +68,7 @@ Write-Host "==================================================" -ForegroundColor
 # ---------------------------------------------------------------------------
 # Step 1: Verify docker is available
 # ---------------------------------------------------------------------------
-Write-Host "`n[1/5] Checking Docker availability..." -ForegroundColor Yellow
+Write-Host "`n[1/4] Checking Docker availability..." -ForegroundColor Yellow
 
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
     Write-Error "docker is not available on PATH. Ensure Docker Desktop is running and retry."
@@ -38,7 +84,7 @@ Write-Host "  Docker $dockerVersion is available." -ForegroundColor Green
 # ---------------------------------------------------------------------------
 # Step 2: Restart containers (wipes all in-memory state)
 # ---------------------------------------------------------------------------
-Write-Host "`n[2/5] Restarting containers to clear in-memory state..." -ForegroundColor Yellow
+Write-Host "`n[2/4] Restarting containers to clear in-memory state..." -ForegroundColor Yellow
 
 # docker compose writes progress to stderr; temporarily set Continue so those lines
 # don't trip $ErrorActionPreference = "Stop" before we can check $LASTEXITCODE.
@@ -55,84 +101,35 @@ if ($restartExit -ne 0) {
 Write-Host "  Containers restarted." -ForegroundColor Green
 
 # ---------------------------------------------------------------------------
-# Step 3: Wait for TraceRCA API to become healthy
+# Step 3: Wait for every required service independently
 # ---------------------------------------------------------------------------
-Write-Host "`n[3/5] Waiting for TraceRCA API to become healthy..." -ForegroundColor Yellow
-
-$healthUrl   = "http://localhost:4004/health"
-$maxAttempts = 30
-$delaySec    = 2
-$healthy     = $false
-
-for ($i = 1; $i -le $maxAttempts; $i++) {
-    try {
-        $resp = Invoke-RestMethod -Uri $healthUrl -Method GET -TimeoutSec 3 -ErrorAction SilentlyContinue
-        if ($resp -and $resp.status -eq "ok") {
-            $healthy = $true
-            Write-Host "  API healthy after $i attempt(s)." -ForegroundColor Green
-            break
-        }
-    } catch { }
-    Write-Host "  ... waiting ($i/$maxAttempts)"
-    Start-Sleep -Seconds $delaySec
-}
-
-if (-not $healthy) {
-    Write-Error "TraceRCA API did not become healthy within $($maxAttempts * $delaySec)s after restart."
-    exit 1
-}
-
-# ---------------------------------------------------------------------------
-# Step 4: Verify all required services healthy and dashboard responds
-# ---------------------------------------------------------------------------
-Write-Host "`n[4/5] Verifying all services and dashboard..." -ForegroundColor Yellow
+Write-Host "`n[3/4] Waiting for all services to become ready..." -ForegroundColor Yellow
 
 $serviceChecks = @(
     @{ name = "Provider Simulator (:4001)"; url = "http://localhost:4001/health" },
     @{ name = "Incident Engine    (:4002)"; url = "http://localhost:4002/health" },
     @{ name = "Replay Engine      (:4003)"; url = "http://localhost:4003/health" },
-    @{ name = "Demo AI App        (:3001)"; url = "http://localhost:3001/health" }
+    @{ name = "Demo AI App        (:3001)"; url = "http://localhost:3001/health" },
+    @{ name = "TraceRCA API       (:4004)"; url = "http://localhost:4004/health" },
+    @{ name = "Dashboard          (:3000)"; url = "http://localhost:3000"; html = $true }
 )
 
 $allHealthy = $true
 foreach ($svc in $serviceChecks) {
-    try {
-        $r = Invoke-RestMethod -Uri $svc.url -Method GET -TimeoutSec 5
-        if ($r.status -eq "ok") {
-            Write-Host "  OK  $($svc.name)" -ForegroundColor Green
-        } else {
-            Write-Host "  FAIL  $($svc.name) status=$($r.status)" -ForegroundColor Red
-            $allHealthy = $false
-        }
-    } catch {
-        Write-Host "  FAIL  $($svc.name) unreachable: $($_.Exception.Message)" -ForegroundColor Red
+    if (-not (Wait-HttpReady -Name $svc.name -Url $svc.url -Html:([bool]$svc.html))) {
         $allHealthy = $false
     }
-}
-
-# Dashboard (HTML, not JSON)
-try {
-    $dashResp = Invoke-WebRequest -Uri "http://localhost:3000" -UseBasicParsing -TimeoutSec 5
-    if ($dashResp.StatusCode -ge 200 -and $dashResp.StatusCode -lt 400) {
-        Write-Host "  OK  Dashboard         (:3000)  HTTP $($dashResp.StatusCode)" -ForegroundColor Green
-    } else {
-        Write-Host "  FAIL  Dashboard HTTP $($dashResp.StatusCode)" -ForegroundColor Red
-        $allHealthy = $false
-    }
-} catch {
-    Write-Host "  FAIL  Dashboard unreachable: $($_.Exception.Message)" -ForegroundColor Red
-    $allHealthy = $false
 }
 
 if (-not $allHealthy) {
-    Write-Error "One or more services are not healthy after reset. Check container logs."
+    Write-Error "One or more services did not become ready after reset. Check container logs."
     exit 1
 }
 
 # ---------------------------------------------------------------------------
-# Step 5: Assert clean state
+# Step 4: All services are ready; assert clean state
 # ---------------------------------------------------------------------------
-Write-Host "`n[5/5] Asserting clean post-reset state..." -ForegroundColor Yellow
+Write-Host "`n[4/4] Asserting clean post-reset state..." -ForegroundColor Yellow
 
 $stateOk = $true
 

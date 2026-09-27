@@ -74,6 +74,90 @@ export interface TelemetrySummary {
 }
 
 // ---------------------------------------------------------------------------
+// Normalized evidence
+// ---------------------------------------------------------------------------
+
+export type EvidenceKind = "event" | "metric" | "change";
+
+export interface EvidenceSource {
+  category: "application" | "llm" | "observability" | "runtime" | "database" | "deployment" | "repository" | "custom";
+  provider?: string;
+  instance?: string;
+  connector?: string;
+}
+
+export interface EvidenceOrigin {
+  kind: "human" | "pipeline" | "agent" | "scheduled" | "system" | "unknown";
+  actor?: string;
+}
+
+export type EvidenceAssertion = "confirmed" | "observed" | "inferred";
+
+export interface EvidenceProvenance {
+  connector?: string;
+  sourceRecordId?: string;
+  collectedAt: string;
+  originalTimestamp?: string;
+  rawReference?: string;
+  idempotencyKey?: string;
+}
+
+export interface EvidenceCorrelation {
+  traceId?: string;
+  requestId?: string;
+  sessionId?: string;
+  service?: string;
+  environment?: string;
+  deploymentId?: string;
+  pod?: string;
+  container?: string;
+  host?: string;
+  node?: string;
+  model?: string;
+  keys?: Record<string, string>;
+}
+
+export interface EvidenceBase {
+  id: string;
+  kind: EvidenceKind;
+  timestamp: string;
+  source: EvidenceSource;
+  origin: EvidenceOrigin;
+  assertion: EvidenceAssertion;
+  provenance: EvidenceProvenance;
+  correlation?: EvidenceCorrelation;
+  attributes?: Record<string, unknown>;
+}
+
+export interface EvidenceEvent extends EvidenceBase {
+  kind: "event";
+  eventType: string;
+  status?: number;
+}
+
+export interface EvidenceMetric extends EvidenceBase {
+  kind: "metric";
+  metric: string;
+  value: number;
+  unit?: string;
+}
+
+export interface EvidenceChange extends EvidenceBase {
+  kind: "change";
+  changeType: string;
+  entity: string;
+  before?: unknown;
+  after?: unknown;
+}
+
+export type Evidence = EvidenceEvent | EvidenceMetric | EvidenceChange;
+
+export interface EvidenceRef {
+  id: string;
+  kind: EvidenceKind;
+}
+
+// ---------------------------------------------------------------------------
 // Incidents
 // ---------------------------------------------------------------------------
 
@@ -101,6 +185,7 @@ export interface Incident {
   summary: string;
   metrics: IncidentMetrics;
   evidence: string[];
+  evidenceRefs?: EvidenceRef[];
   timeline: TelemetryEvent[];
 }
 

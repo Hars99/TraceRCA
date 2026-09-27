@@ -21,6 +21,7 @@ services:
       - "${INCIDENT_ENGINE_PORT:-4002}:4002"
     environment:
       - INCIDENT_ENGINE_PORT=${INCIDENT_ENGINE_PORT:-4002}
+      - PROMETHEUS_URL=http://prometheus:9090
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:4002/health"]
       interval: 5s
@@ -102,3 +103,25 @@ services:
     depends_on:
       tracerca-api:
         condition: service_healthy
+
+  local-llm-demo:
+    build:
+      context: .
+      dockerfile: apps/local-llm-demo/Dockerfile
+    ports:
+      - "${LOCAL_LLM_DEMO_PORT:-3002}:3002"
+    environment:
+      - LOCAL_LLM_DEMO_PORT=3002
+      - OLLAMA_URL=${OLLAMA_URL:-http://host.docker.internal:11434}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-}
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    ports:
+      # 9090 is frequently occupied by a host Prometheus; use 9091 externally
+      # while retaining Prometheus's standard internal port.
+      - "${PROMETHEUS_PORT:-9091}:9090"
+    volumes:
+      - ./config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      - local-llm-demo

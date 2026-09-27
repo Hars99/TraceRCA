@@ -11,6 +11,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { registerIncidentTools } from "./tools/incidents.js";
 import { registerTelemetryTools } from "./tools/telemetry.js";
 import { registerReplayTools } from "./tools/replay.js";
+import { registerEvidenceTools } from "./tools/evidence.js";
 
 const server = new McpServer({
   name: "tracerca",
@@ -20,6 +21,7 @@ const server = new McpServer({
 registerIncidentTools(server);
 registerTelemetryTools(server);
 registerReplayTools(server);
+registerEvidenceTools(server);
 
 async function main(): Promise<void> {
   const transport = new StdioServerTransport();

@@ -42,4 +42,13 @@ router.get("/:id/metrics", async (req: Request, res: Response) => {
   res.status(status).json(body);
 });
 
+// GET /api/incidents/:id/evidence
+router.get("/:id/evidence", async (req: Request, res: Response) => {
+  const { status, body } = await proxyGet(
+    "incident-engine",
+    `${INCIDENT_ENGINE_URL}/incidents/${req.params.id}/evidence`
+  );
+  res.status(status).json(body);
+});
+
 export default router;

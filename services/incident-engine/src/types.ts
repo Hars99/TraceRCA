@@ -1,5 +1,7 @@
 // Local mirror of packages/contracts incident + telemetry types.
 
+import type { EvidenceRef } from "./evidence";
+
 export type EventType =
   | "request.started"
   | "provider.requested"
@@ -49,6 +51,7 @@ export interface Incident {
   summary: string;
   metrics: IncidentMetrics;
   evidence: string[];
+  evidenceRefs?: EvidenceRef[];
   timeline: TelemetryEvent[];
 }
 
