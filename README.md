@@ -134,6 +134,9 @@ TraceRCA does not use IBM Bob as a generic text chat. Bob is equipped with domai
 IBM Bob  ──(MCP over stdio)──>  services/bob-mcp  ──(HTTP REST)──>  tracerca-api (:4004)
 ```
 
+> **MCP Build Note**: `services/bob-mcp/build/index.js` is compiled from TypeScript and is not committed to the repository. `start-demo.ps1` automatically installs dependencies and builds this file on first run (or when source files change). `.bob/mcp.json` already points to the correct output path — no manual configuration is required.
+
+
 ### Available MCP Tools
 
 | Tool Name | Description |
@@ -230,23 +233,33 @@ The Next.js 16 operator dashboard provides real-time visibility into the system:
 
 ### Prerequisites
 - Docker & Docker Compose
+- Node.js 20+ (required for MCP server build — handled automatically by `start-demo.ps1`)
 - PowerShell (Windows / cross-platform)
-- Node.js 20+ (for local development)
 
-### 1. Launch the Stack
+### Fresh Clone — Two Commands
 
 ```powershell
 .\scripts\start-demo.ps1
-```
-*This command starts all containers in the background and waits for the API gateway to pass health checks.*
-
-### 2. Prepare Demo Data Deterministically
-
-```powershell
 .\scripts\prepare-demo.ps1
 ```
 
-*Output summary:*
+That is the complete setup. No manual pre-build step is required.
+
+**What `start-demo.ps1` does automatically:**
+1. Checks whether `services/bob-mcp/build/index.js` is missing or stale (source files newer than build output).
+2. If a build is needed, runs `npm ci` + `npm run build` inside `services/bob-mcp/` via `scripts/setup-mcp.ps1`.
+3. Starts all Docker containers and waits for the API gateway health check to pass.
+
+**What `prepare-demo.ps1` does:**
+- Degrades Provider A → sends a demo request → captures the generated incident → runs replay verification → prints summary and dashboard URLs.
+
+> To manually rebuild the MCP server without starting the stack (debugging only):
+> ```powershell
+> .\scripts\setup-mcp.ps1
+> ```
+
+### Expected Output from `prepare-demo.ps1`
+
 ```text
 Incident ID                : INC-001
 Replay ID                  : RPL-001
