@@ -52,6 +52,14 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
         <div><span>Data source</span><strong>TraceRCA demo telemetry</strong></div>
       </section>
 
+      <section className="incident-story-rail" aria-label="Incident outcome summary">
+        <div><span>Trigger</span><strong>{metrics?.provider429Count ?? "—"} × HTTP 429</strong></div><b>→</b>
+        <div><span>Amplifier</span><strong>{retryCount} retries</strong></div><b>→</b>
+        <div><span>Recovery</span><strong>Fallback to {metrics?.finalProvider || "—"}</strong></div><b>→</b>
+        <div><span>Impact</span><strong>{formatMs(metrics?.totalLatencyMs)}</strong></div><b>→</b>
+        <div className={replay?.verified ? "story-verified" : ""}><span>Remediation</span><strong>{replay?.verified ? "VERIFIED" : "NOT VERIFIED"}</strong></div>
+      </section>
+
       {eventsResult.error ? <ErrorState title="Ordered events unavailable" detail={eventsResult.error} /> : null}
       {metricsResult.error ? <ErrorState title="Incident metrics unavailable" detail={metricsResult.error} /> : null}
 
@@ -64,7 +72,22 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
         <MetricCard icon="✓" label="Final provider" value={metrics?.finalProvider || "—"} detail="completed response" />
       </section>
 
-      <div className="detail-grid">
+      <section className="panel rca-panel incident-rca-panel">
+        <SectionHeading eyebrow="Evidence-grounded reasoning" title="Trace RCA" action={<SourceBadge tone="neutral">NORMALIZED INCIDENT EVIDENCE</SourceBadge>} />
+        <div className="rca-grid">
+          <article><span>Trigger</span><strong>{failedProvider && metrics?.provider429Count ? `Provider ${failedProvider} returned HTTP 429 ${metrics.provider429Count} times` : incident.trigger || "Insufficient evidence"}</strong></article>
+          <article><span>Amplifier</span><strong>{retryCount > 0 ? `${retryCount} observed retries delayed fallback` : "No retry amplifier established"}</strong></article>
+          <article><span>Recovery</span><strong>{metrics?.fallbackCount && metrics.finalProvider ? `Fallback completed through Provider ${metrics.finalProvider}` : "Recovery evidence unavailable"}</strong></article>
+          <article><span>Impact</span><strong>{metrics?.totalLatencyMs !== undefined ? `${formatMs(metrics.totalLatencyMs)} total request latency` : "Impact not measured"}</strong></article>
+        </div>
+      </section>
+
+      <section className="panel verification-panel">
+        <div className="verification-title"><div><span className="eyebrow">Remediation + replay</span><h2>{replay ? "Measured baseline and candidate" : "Replay verification not available"}</h2></div>{replay ? <VerificationBadge verified={replay.verified} /> : <SourceBadge tone="warning">NOT YET VERIFIED</SourceBadge>}</div>
+        {replay ? <><div className="remediation-strip"><div><span>Baseline</span><strong>maxRetries = {replay.baselineConfig.maxRetries}</strong></div><div className="arrow-separator">→</div><div><span>Candidate</span><strong>maxRetries = {replay.candidateConfig.maxRetries}</strong></div></div><div className="verification-metrics"><div><span>Baseline latency</span><strong>{formatMs(replay.baseline.totalLatencyMs)}</strong></div><div><span>Candidate latency</span><strong>{formatMs(replay.candidate.totalLatencyMs)}</strong></div><div><span>Retries</span><strong>{replay.baseline.retryCount} → {replay.candidate.retryCount}</strong></div><div><span>Final provider</span><strong>{replay.candidate.finalProvider}</strong></div><div><span>Improvement</span><strong>{formatPercent(replay.comparison.latencyImprovementPercent)}</strong></div></div><Link className="button secondary-button" href={`/replays/${encodeURIComponent(replay.id)}`}>Open replay evidence</Link></> : <p className="muted">No replay record is linked to this incident. The dashboard will not infer verification.</p>}
+      </section>
+
+      <div className="detail-grid incident-detail-grid">
         <section className="panel timeline-panel">
           <SectionHeading eyebrow="Telemetry / ordered" title="Incident timeline" action={<span className="section-count">{events.length} events</span>} />
           <IncidentTimeline events={events} />
@@ -83,21 +106,6 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
           </section>
         </aside>
       </div>
-
-      <section className="panel rca-panel incident-rca-panel">
-        <SectionHeading eyebrow="Evidence-grounded reasoning" title="Trace RCA" action={<SourceBadge tone="neutral">NORMALIZED INCIDENT EVIDENCE</SourceBadge>} />
-        <div className="rca-grid">
-          <article><span>Trigger</span><strong>{failedProvider && metrics?.provider429Count ? `Provider ${failedProvider} returned HTTP 429 ${metrics.provider429Count} times` : incident.trigger || "Insufficient evidence"}</strong></article>
-          <article><span>Amplifier</span><strong>{retryCount > 0 ? `${retryCount} observed retries delayed fallback` : "No retry amplifier established"}</strong></article>
-          <article><span>Recovery</span><strong>{metrics?.fallbackCount && metrics.finalProvider ? `Fallback completed through Provider ${metrics.finalProvider}` : "Recovery evidence unavailable"}</strong></article>
-          <article><span>Impact</span><strong>{metrics?.totalLatencyMs !== undefined ? `${formatMs(metrics.totalLatencyMs)} total request latency` : "Impact not measured"}</strong></article>
-        </div>
-      </section>
-
-      <section className="panel verification-panel">
-        <div className="verification-title"><div><span className="eyebrow">Remediation + replay</span><h2>{replay ? "Measured baseline and candidate" : "Replay verification not available"}</h2></div>{replay ? <VerificationBadge verified={replay.verified} /> : <SourceBadge tone="warning">NOT YET VERIFIED</SourceBadge>}</div>
-        {replay ? <><div className="remediation-strip"><div><span>Baseline</span><strong>maxRetries = {replay.baselineConfig.maxRetries}</strong></div><div className="arrow-separator">→</div><div><span>Candidate</span><strong>maxRetries = {replay.candidateConfig.maxRetries}</strong></div></div><div className="verification-metrics"><div><span>Baseline latency</span><strong>{formatMs(replay.baseline.totalLatencyMs)}</strong></div><div><span>Candidate latency</span><strong>{formatMs(replay.candidate.totalLatencyMs)}</strong></div><div><span>Retries</span><strong>{replay.baseline.retryCount} → {replay.candidate.retryCount}</strong></div><div><span>Final provider</span><strong>{replay.candidate.finalProvider}</strong></div><div><span>Improvement</span><strong>{formatPercent(replay.comparison.latencyImprovementPercent)}</strong></div></div><Link className="button secondary-button" href={`/replays/${encodeURIComponent(replay.id)}`}>Open replay evidence</Link></> : <p className="muted">No replay record is linked to this incident. The dashboard will not infer verification.</p>}
-      </section>
 
       <footer className="page-footer"><span>Observed incident data · deterministic replay verification</span><Link href="/">Back to overview</Link></footer>
     </div>
