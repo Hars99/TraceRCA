@@ -117,3 +117,29 @@ export interface ApiResult<T> {
   data: T | null;
   error: string | null;
 }
+
+export interface EvidenceSource { category: string; provider?: string; connector?: string; }
+export interface EvidenceCorrelation { service?: string; environment?: string; model?: string; keys?: Record<string, string>; }
+export interface EvidenceRecord {
+  id: string;
+  kind: "event" | "metric" | "change";
+  timestamp: string;
+  source: EvidenceSource;
+  assertion: string;
+  correlation?: EvidenceCorrelation;
+  attributes?: { prometheusLabels?: Record<string, string>; [key: string]: unknown };
+  eventType?: string;
+  status?: number;
+  metric?: string;
+  value?: number;
+  unit?: string;
+  changeType?: string;
+  entity?: string;
+  before?: unknown;
+  after?: unknown;
+}
+
+export interface EvidenceResponse { count: number; evidence: EvidenceRecord[]; }
+export interface IncidentEvidenceResponse extends EvidenceResponse { incidentId: string; }
+export type ServiceHealthState = "healthy" | "unavailable" | "unknown";
+export interface ServiceHealth { name: string; state: ServiceHealthState; detail?: string; }

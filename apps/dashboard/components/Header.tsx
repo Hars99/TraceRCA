@@ -12,8 +12,9 @@ export function Header() {
           </span>
         </Link>
         <nav className="topnav" aria-label="Primary navigation">
-          <Link href="/">Operations</Link>
+          <Link href="/">Overview</Link>
           <a href="/#incidents">Incidents</a>
+          <Link href="/evidence/local-llm">Evidence / Investigations</Link>
           <a href="/#replays">Replays</a>
         </nav>
         <span className="header-context">LIVE EVIDENCE CONSOLE</span>

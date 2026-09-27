@@ -1,6 +1,6 @@
 # Task 4 — Generic Evidence Model & Ingestion Layer Design
 
-**Status:** Design-only. No files modified. No services changed.
+**Status:** Historical design record. The generic evidence layer described here was subsequently implemented; use the current source and README for implemented behavior.
 
 **Revision notes (post-review, round 3 — FINAL):**
 - Normalization happens at the telemetry ingestion boundary (`POST /ingest` in incident-engine), not after `createIncident()`. Every incoming telemetry batch produces evidence, including healthy/non-incident requests.

@@ -1,17 +1,19 @@
 import Link from "next/link";
 import { IncidentTimeline, ObservedIncidentFlow } from "../../../components/IncidentTimeline";
-import { ErrorState, MetricCard, SectionHeading, SeverityBadge, StatusBadge } from "../../../components/ui";
-import { getIncident, getIncidentEvents, getIncidentMetrics } from "../../../lib/api";
-import { formatDate, formatMs, formatNumber } from "../../../lib/format";
+import { ErrorState, MetricCard, SectionHeading, SeverityBadge, SourceBadge, StatusBadge, VerificationBadge } from "../../../components/ui";
+import { getIncident, getIncidentEvidence, getIncidentEvents, getIncidentMetrics, getReplays } from "../../../lib/api";
+import { formatDate, formatMs, formatNumber, formatPercent } from "../../../lib/format";
 
 export const dynamic = "force-dynamic";
 
 export default async function IncidentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [incidentResult, eventsResult, metricsResult] = await Promise.all([
+  const [incidentResult, eventsResult, metricsResult, evidenceResult, replaysResult] = await Promise.all([
     getIncident(id),
     getIncidentEvents(id),
     getIncidentMetrics(id),
+    getIncidentEvidence(id),
+    getReplays(),
   ]);
 
   if (!incidentResult.data) {
@@ -26,13 +28,18 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
   const incident = incidentResult.data;
   const events = eventsResult.data?.events ?? [];
   const metrics = metricsResult.data ?? incident.metrics;
+  const normalizedEvidence = evidenceResult.data?.evidence ?? [];
+  const replay = (replaysResult.data?.replays ?? []).filter((item) => item.incidentId === incident.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+  const service = normalizedEvidence.find((item) => item.correlation?.service)?.correlation?.service ?? "Not established";
+  const retryCount = metrics?.retryCount ?? events.filter((event) => event.type === "router.retry_scheduled").length;
+  const failedProvider = events.find((event) => event.type === "provider.response" && typeof event.status === "number" && event.status >= 400)?.provider;
 
   return (
     <div className="page-shell">
       <div className="breadcrumb"><Link href="/">Operations</Link><span>/</span><span>{incident.id}</span></div>
       <section className="detail-hero">
         <div>
-          <span className="eyebrow">Incident investigation</span>
+          <span className="eyebrow">Verified incident investigation</span>
           <div className="title-line"><h1>{incident.id}</h1><SeverityBadge severity={incident.severity} /><StatusBadge status={incident.status} /></div>
           <p className="detail-summary">{incident.summary || "Incident summary unavailable"}</p>
         </div>
@@ -40,9 +47,17 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
       </section>
 
       <section className="identity-grid">
-        <div><span>Request ID</span><code>{incident.requestId}</code></div>
+        <div><span>Affected service</span><strong>{service}</strong></div>
         <div><span>Trace ID</span><code>{incident.traceId}</code></div>
-        <div><span>Recorded trigger</span><strong>{incident.trigger || "Evidence unavailable"}</strong></div>
+        <div><span>Data source</span><strong>TraceRCA demo telemetry</strong></div>
+      </section>
+
+      <section className="incident-story-rail" aria-label="Incident outcome summary">
+        <div><span>Trigger</span><strong>{metrics?.provider429Count ?? "—"} × HTTP 429</strong></div><b>→</b>
+        <div><span>Amplifier</span><strong>{retryCount} retries</strong></div><b>→</b>
+        <div><span>Recovery</span><strong>Fallback to {metrics?.finalProvider || "—"}</strong></div><b>→</b>
+        <div><span>Impact</span><strong>{formatMs(metrics?.totalLatencyMs)}</strong></div><b>→</b>
+        <div className={replay?.verified ? "story-verified" : ""}><span>Remediation</span><strong>{replay?.verified ? "VERIFIED" : "NOT VERIFIED"}</strong></div>
       </section>
 
       {eventsResult.error ? <ErrorState title="Ordered events unavailable" detail={eventsResult.error} /> : null}
@@ -57,7 +72,22 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
         <MetricCard icon="✓" label="Final provider" value={metrics?.finalProvider || "—"} detail="completed response" />
       </section>
 
-      <div className="detail-grid">
+      <section className="panel rca-panel incident-rca-panel">
+        <SectionHeading eyebrow="Evidence-grounded reasoning" title="Trace RCA" action={<SourceBadge tone="neutral">NORMALIZED INCIDENT EVIDENCE</SourceBadge>} />
+        <div className="rca-grid">
+          <article><span>Trigger</span><strong>{failedProvider && metrics?.provider429Count ? `Provider ${failedProvider} returned HTTP 429 ${metrics.provider429Count} times` : incident.trigger || "Insufficient evidence"}</strong></article>
+          <article><span>Amplifier</span><strong>{retryCount > 0 ? `${retryCount} observed retries delayed fallback` : "No retry amplifier established"}</strong></article>
+          <article><span>Recovery</span><strong>{metrics?.fallbackCount && metrics.finalProvider ? `Fallback completed through Provider ${metrics.finalProvider}` : "Recovery evidence unavailable"}</strong></article>
+          <article><span>Impact</span><strong>{metrics?.totalLatencyMs !== undefined ? `${formatMs(metrics.totalLatencyMs)} total request latency` : "Impact not measured"}</strong></article>
+        </div>
+      </section>
+
+      <section className="panel verification-panel">
+        <div className="verification-title"><div><span className="eyebrow">Remediation + replay</span><h2>{replay ? "Measured baseline and candidate" : "Replay verification not available"}</h2></div>{replay ? <VerificationBadge verified={replay.verified} /> : <SourceBadge tone="warning">NOT YET VERIFIED</SourceBadge>}</div>
+        {replay ? <><div className="remediation-strip"><div><span>Baseline</span><strong>maxRetries = {replay.baselineConfig.maxRetries}</strong></div><div className="arrow-separator">→</div><div><span>Candidate</span><strong>maxRetries = {replay.candidateConfig.maxRetries}</strong></div></div><div className="verification-metrics"><div><span>Baseline latency</span><strong>{formatMs(replay.baseline.totalLatencyMs)}</strong></div><div><span>Candidate latency</span><strong>{formatMs(replay.candidate.totalLatencyMs)}</strong></div><div><span>Retries</span><strong>{replay.baseline.retryCount} → {replay.candidate.retryCount}</strong></div><div><span>Final provider</span><strong>{replay.candidate.finalProvider}</strong></div><div><span>Improvement</span><strong>{formatPercent(replay.comparison.latencyImprovementPercent)}</strong></div></div><Link className="button secondary-button" href={`/replays/${encodeURIComponent(replay.id)}`}>Open replay evidence</Link></> : <p className="muted">No replay record is linked to this incident. The dashboard will not infer verification.</p>}
+      </section>
+
+      <div className="detail-grid incident-detail-grid">
         <section className="panel timeline-panel">
           <SectionHeading eyebrow="Telemetry / ordered" title="Incident timeline" action={<span className="section-count">{events.length} events</span>} />
           <IncidentTimeline events={events} />
@@ -76,6 +106,8 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
           </section>
         </aside>
       </div>
+
+      <footer className="page-footer"><span>Observed incident data · deterministic replay verification</span><Link href="/">Back to overview</Link></footer>
     </div>
   );
 }
